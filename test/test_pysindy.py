@@ -207,7 +207,7 @@ def test_simulate(data):
     x, t = data
     model = SINDy()
     model.fit(x, t)
-    x1 = model.simulate(x[0], t)
+    x1 = model.simulate(np.ravel(x[0]), t)
 
     assert len(x1) == len(t)
 

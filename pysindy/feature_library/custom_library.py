@@ -2,6 +2,7 @@ from itertools import combinations
 from itertools import combinations_with_replacement as combinations_w_r
 
 from numpy import empty
+from numpy import shape
 from sklearn.utils import check_array
 from sklearn.utils.validation import check_is_fitted
 
@@ -14,8 +15,10 @@ class CustomLibrary(BaseFeatureLibrary):
     Parameters
     ----------
     library_functions : list of mathematical functions
-        Functions to include in the library. Each function will be
-        applied to each input variable.
+        Functions to include in the library. Default is to use same functions
+        for all variables. Can also be used so that each variable has an
+        associated library, in this case library_functions is shape
+        (n_input_features, num_library_functions)
 
     function_names : list of functions, optional (default None)
         List of functions used to generate feature names for each library
@@ -33,6 +36,18 @@ class CustomLibrary(BaseFeatureLibrary):
         will be omitted, but those of the form :math:`f(x,y)` and :math:`f(x,y,z)`
         will be included.
         If False, all combinations will be included.
+
+    linear_control : boolean, optional (default False)
+        Special option to allow for a pure linear control term
+        in the SINDy library. The default option is to take a tensor product
+        of the control term u, with all library terms in library_functions. So
+        a quadratic polynomial library would give you
+        [1, x, x^2, u, ux, ux^2]. If linear_control is True, it produces only
+        the pure linear u term, i.e. [1, x, x^2, u].
+
+    n_control_features : int, optional (default None)
+        If linear_control = True, then this specifies the shape
+        of the control input
 
     Attributes
     ----------
@@ -66,14 +81,30 @@ class CustomLibrary(BaseFeatureLibrary):
     ['f0(x0)', 'f0(x1)', 'f1(x0,x1)']
     """
 
-    def __init__(self, library_functions, function_names=None, interaction_only=True):
+    def __init__(
+        self,
+        library_functions,
+        function_names=None,
+        interaction_only=True,
+        linear_control=False,
+        n_control_features=None,
+    ):
         super(CustomLibrary, self).__init__()
         self.functions = library_functions
         self.function_names = function_names
-        if function_names and (len(library_functions) != len(function_names)):
+        self.linear_control = linear_control
+        self.n_control_features = n_control_features
+        if function_names and (
+            shape(library_functions)[-1] != shape(function_names)[-1]
+        ):
             raise ValueError(
                 "library_functions and function_names must have the same"
                 " number of elements"
+            )
+        if linear_control and n_control_features is None:
+            raise ValueError(
+                "If using linear control option, need to pass "
+                "n_control_features argument"
             )
         self.interaction_only = interaction_only
 
@@ -97,16 +128,22 @@ class CustomLibrary(BaseFeatureLibrary):
         output_feature_names : list of string, length n_output_features
         """
         check_is_fitted(self)
+        n_features = self.n_input_features_
+        if self.linear_control:
+            n_features = self.n_input_features_ - self.n_control_features
         if input_features is None:
-            input_features = ["x%d" % i for i in range(self.n_input_features_)]
+            input_features = ["x%d" % i for i in range(n_features)]
         feature_names = []
         for i, f in enumerate(self.functions):
             for c in self._combinations(
-                self.n_input_features_, f.__code__.co_argcount, self.interaction_only
+                n_features, f.__code__.co_argcount, self.interaction_only
             ):
                 feature_names.append(
                     self.function_names[i](*[input_features[j] for j in c])
                 )
+        if self.linear_control:
+            for i in range(self.n_control_features):
+                feature_names.append("u%d" % i)
         return feature_names
 
     def fit(self, x, y=None):
@@ -123,20 +160,26 @@ class CustomLibrary(BaseFeatureLibrary):
         """
         n_samples, n_features = check_array(x).shape
         self.n_input_features_ = n_features
+        if self.linear_control:
+            n_x = n_features - self.n_control_features
+        else:
+            n_x = n_features
         n_output_features = 0
         for f in self.functions:
             n_args = f.__code__.co_argcount
             n_output_features += len(
-                list(self._combinations(n_features, n_args, self.interaction_only))
+                list(self._combinations(n_x, n_args, self.interaction_only))
             )
-        self.n_output_features_ = n_output_features
-        if self.function_names is None:
-            self.function_names = list(
-                map(
-                    lambda i: (lambda *x: "f" + str(i) + "(" + ",".join(x) + ")"),
-                    range(len(self.functions)),
+            self.n_output_features_ = n_output_features
+            if self.function_names is None:
+                self.function_names = list(
+                    map(
+                        lambda i: (lambda *x: "f" + str(i) + "(" + ",".join(x) + ")"),
+                        range(len(self.functions)),
+                    )
                 )
-            )
+        if self.linear_control:
+            self.n_output_features_ += self.n_control_features
         return self
 
     def transform(self, x):
@@ -161,14 +204,20 @@ class CustomLibrary(BaseFeatureLibrary):
 
         if n_features != self.n_input_features_:
             raise ValueError("x shape does not match training shape")
-
+        if self.linear_control:
+            n_x = self.n_input_features_ - self.n_control_features
+        else:
+            n_x = self.n_input_features_
         xp = empty((n_samples, self.n_output_features_), dtype=x.dtype)
         library_idx = 0
         for f in self.functions:
             for c in self._combinations(
-                self.n_input_features_, f.__code__.co_argcount, self.interaction_only
+                n_x, f.__code__.co_argcount, self.interaction_only
             ):
                 xp[:, library_idx] = f(*[x[:, j] for j in c])
                 library_idx += 1
-
+        if self.linear_control:
+            for i in range(n_x, self.n_input_features_):
+                xp[:, library_idx] = x[:, i]
+                library_idx += 1
         return xp

@@ -51,8 +51,9 @@ class SR3(BaseOptimizer):
 
     thresholder : string, optional (default 'L0')
         Regularization function to use. Currently implemented options
-        are 'L0' (L0 norm), 'L1' (L1 norm), and 'CAD' (clipped
-        absolute deviation).
+        are 'L0' (L0 norm), 'L1' (L1 norm), 'L2' (L2 norm) and 'CAD' (clipped
+        absolute deviation). Note by 'L2 norm' we really mean
+        the squared L2 norm, i.e. ridge regression
 
     trimming_fraction : float, optional (default 0.0)
         Fraction of the data samples to trim during fitting. Should
@@ -79,8 +80,25 @@ class SR3(BaseOptimizer):
         the regressors X will be normalized before regression by subtracting
         the mean and dividing by the L2-norm.
 
+    normalize_columns : boolean, optional (default False)
+        This parameter normalizes the columns of Theta before the
+        optimization is done. This tends to standardize the columns
+        to similar magnitudes, often improving performance.
+
     copy_X : boolean, optional (default True)
         If True, X will be copied; else, it may be overwritten.
+
+    thresholds : np.ndarray, shape (n_targets, n_features), optional \
+            (default None)
+        Array of thresholds for each library function coefficient.
+        Each row corresponds to a measurement variable and each column
+        to a function from the feature library.
+        Recall that SINDy seeks a matrix :math:`\\Xi` such that
+        :math:`\\dot{X} \\approx \\Theta(X)\\Xi`.
+        ``thresholds[i, j]`` should specify the threshold to be used for the
+        (j + 1, i + 1) entry of :math:`\\Xi`. That is to say it should give the
+        threshold to be used for the (j + 1)st library function in the equation
+        for the (i + 1)st measurement variable.
 
     Attributes
     ----------
@@ -127,9 +145,11 @@ class SR3(BaseOptimizer):
         trimming_step_size=1.0,
         max_iter=30,
         normalize=False,
+        normalize_columns=False,
         fit_intercept=False,
         copy_X=True,
         initial_guess=None,
+        thresholds=None,
     ):
         super(SR3, self).__init__(
             max_iter=max_iter,
@@ -147,8 +167,34 @@ class SR3(BaseOptimizer):
             raise ValueError("tol must be positive")
         if (trimming_fraction < 0) or (trimming_fraction > 1):
             raise ValueError("trimming fraction must be between 0 and 1")
+        if (
+            thresholder.lower() != "l0"
+            and thresholder.lower() != "l1"
+            and thresholder.lower() != "l2"
+            and thresholder.lower() != "weighted_l0"
+            and thresholder.lower() != "weighted_l1"
+            and thresholder.lower() != "weighted_l2"
+            and thresholder.lower() != "cad"
+        ):
+            raise NotImplementedError(
+                "Regularizer must be l0, l1, l2, weighted_l0, weighted_l1, "
+                "weighted_l2 or cad"
+            )
+        if thresholder[:8].lower() == "weighted" and thresholds is None:
+            raise ValueError(
+                "weighted thresholder requires the thresholds parameter to be used"
+            )
+        if thresholder[:8].lower() != "weighted" and thresholds is not None:
+            raise ValueError(
+                "The thresholds argument cannot be used without a weighted thresholder,"
+                " e.g. thresholder='weighted_l0'"
+            )
+        if thresholds is not None and np.any(thresholds < 0):
+            raise ValueError("thresholds cannot contain negative entries")
 
         self.threshold = threshold
+        self.thresholds = thresholds
+        self.normalize_columns = normalize_columns
         self.nu = nu
         self.tol = tol
         self.thresholder = thresholder
@@ -187,7 +233,10 @@ class SR3(BaseOptimizer):
 
     def _update_sparse_coef(self, coef_full):
         """Update the regularized weight vector"""
-        coef_sparse = self.prox(coef_full, self.threshold)
+        if self.thresholds is None:
+            coef_sparse = self.prox(coef_full, self.threshold)
+        else:
+            coef_sparse = self.prox(coef_full, self.thresholds.T)
         self.history_.append(coef_sparse.T)
         return coef_sparse
 
@@ -231,6 +280,12 @@ class SR3(BaseOptimizer):
 
         coef_sparse = self.coef_.T
         n_samples, n_features = x.shape
+        x_normed = np.copy(x)
+        if self.normalize_columns:
+            reg = np.zeros(n_features)
+            for i in range(n_features):
+                reg[i] = 1.0 / np.linalg.norm(x[:, i], 2)
+                x_normed[:, i] = reg[i] * x[:, i]
 
         if self.use_trimming:
             coef_full = coef_sparse.copy()
@@ -239,18 +294,21 @@ class SR3(BaseOptimizer):
 
         # Precompute some objects for upcoming least-squares solves.
         # Assumes that self.nu is fixed throughout optimization procedure.
-        cho = cho_factor(np.dot(x.T, x) + np.diag(np.full(x.shape[1], 1.0 / self.nu)))
-        x_transpose_y = np.dot(x.T, y)
+        cho = cho_factor(
+            np.dot(x_normed.T, x_normed)
+            + np.diag(np.full(x_normed.shape[1], 1.0 / self.nu))
+        )
+        x_transpose_y = np.dot(x_normed.T, y)
 
         for _ in range(self.max_iter):
             if self.use_trimming:
-                x_weighted = x * trimming_array.reshape(n_samples, 1)
+                x_weighted = x_normed * trimming_array.reshape(n_samples, 1)
                 cho = cho_factor(
-                    np.dot(x_weighted.T, x)
-                    + np.diag(np.full(x.shape[1], 1.0 / self.nu))
+                    np.dot(x_weighted.T, x_normed)
+                    + np.diag(np.full(x_normed.shape[1], 1.0 / self.nu))
                 )
                 x_transpose_y = np.dot(x_weighted.T, y)
-                trimming_grad = 0.5 * np.sum((y - x.dot(coef_full)) ** 2, axis=1)
+                trimming_grad = 0.5 * np.sum((y - x_normed.dot(coef_full)) ** 2, axis=1)
             coef_full = self._update_full_coef(cho, x_transpose_y, coef_sparse)
             coef_sparse = self._update_sparse_coef(coef_full)
             if self.use_trimming:
@@ -268,8 +326,12 @@ class SR3(BaseOptimizer):
                 ),
                 ConvergenceWarning,
             )
+        if self.normalize_columns:
+            self.coef_ = np.multiply(reg, coef_sparse.T)
+            self.coef_full_ = np.multiply(reg, coef_full.T)
+        else:
+            self.coef_ = coef_sparse.T
+            self.coef_full_ = coef_full.T
 
-        self.coef_ = coef_sparse.T
-        self.coef_full_ = coef_full.T
         if self.use_trimming:
             self.trimming_array = trimming_array

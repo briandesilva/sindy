@@ -8,6 +8,7 @@ from numpy import newaxis
 from numpy import vstack
 from numpy import zeros
 from scipy.integrate import odeint
+from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 from scipy.linalg import LinAlgWarning
 from sklearn.base import BaseEstimator
@@ -18,6 +19,7 @@ from sklearn.utils.validation import check_is_fitted
 
 from .differentiation import FiniteDifference
 from .feature_library import PolynomialLibrary
+from .feature_library import SINDyPILibrary
 from .optimizers import SINDyOptimizer
 from .optimizers import STLSQ
 from .utils import drop_nan_rows
@@ -80,13 +82,13 @@ class SINDy(BaseEstimator):
     Examples
     --------
     >>> import numpy as np
-    >>> from scipy.integrate import odeint
+    >>> from scipy.integrate import solve_ivp
     >>> from pysindy import SINDy
     >>> lorenz = lambda z,t : [10*(z[1] - z[0]),
     >>>                        z[0]*(28 - z[2]) - z[1],
     >>>                        z[0]*z[1] - 8/3*z[2]]
     >>> t = np.arange(0,2,.002)
-    >>> x = odeint(lorenz, [-8,8,27], t)
+    >>> x = solve_ivp(lorenz, [-8,8,27], t)
     >>> model = SINDy()
     >>> model.fit(x, t=t[1]-t[0])
     >>> model.print()
@@ -108,7 +110,7 @@ class SINDy(BaseEstimator):
     0.999999985520653
 
     >>> import numpy as np
-    >>> from scipy.integrate import odeint
+    >>> from scipy.integrate import solve_ivp
     >>> from pysindy import SINDy
     >>> u = lambda t : np.sin(2 * t)
     >>> lorenz_c = lambda z,t : [
@@ -117,7 +119,7 @@ class SINDy(BaseEstimator):
                 z[0] * z[1] - 8 / 3 * z[2],
         ]
     >>> t = np.arange(0,2,0.002)
-    >>> x = odeint(lorenz_c, [-8,8,27], t)
+    >>> x = solve_ivp(lorenz_c, [-8,8,27], t)
     >>> u_eval = u(t)
     >>> model = SINDy()
     >>> model.fit(x, u_eval, t=t[1]-t[0])
@@ -398,11 +400,21 @@ class SINDy(BaseEstimator):
             Precision to be used when printing out model coefficients.
         """
         eqns = self.equations(precision)
+        if isinstance(self.feature_library, SINDyPILibrary):
+            feature_names = self.get_feature_names()
+        else:
+            feature_names = self.feature_names
         for i, eqn in enumerate(eqns):
             if self.discrete_time:
-                print(self.feature_names[i] + "[k+1] = " + eqn)
+                names = "(" + feature_names[i] + ")"
+                print(names + "[k+1] = " + eqn)
             elif lhs is None:
-                print(self.feature_names[i] + "' = " + eqn)
+                if not isinstance(self.feature_library, SINDyPILibrary):
+                    names = "(" + feature_names[i] + ")"
+                    print(names + "' = " + eqn)
+                else:
+                    names = feature_names[i]
+                    print(names + " = " + eqn)
             else:
                 print(lhs[i] + " = " + eqn)
 
@@ -664,10 +676,10 @@ class SINDy(BaseEstimator):
         x0,
         t,
         u=None,
-        integrator=odeint,
+        integrator="solve_ivp",
         stop_condition=None,
         interpolator=None,
-        integrator_kws={},
+        integrator_kws={"method": "LSODA"},
         interpolator_kws={},
     ):
         """
@@ -696,9 +708,9 @@ class SINDy(BaseEstimator):
             u should be a list (with ``len(u) == t``) or array (with
             ``u.shape[0] == 1``) giving the control inputs at each step.
 
-        integrator: callable, optional (default ``odeint``)
+        integrator: string, optional (default ``solve_ivp``)
             Function to use to integrate the system.
-            Default is ``scipy.integrate.odeint``.
+            Default is ``scipy.integrate.solve_ivp``.
 
         stop_condition: function object, optional
             If model is in discrete time, optional function that gives a
@@ -773,7 +785,7 @@ class SINDy(BaseEstimator):
                         " were not used when the model was fit"
                     )
 
-                def rhs(x, t):
+                def rhs(t, x):
                     return self.predict(x[newaxis, :])[0]
 
             else:
@@ -796,15 +808,24 @@ class SINDy(BaseEstimator):
 
                 if ndim(u_fun(t[0])) == 1:
 
-                    def rhs(x, t):
+                    def rhs(t, x):
                         return self.predict(x[newaxis, :], u_fun(t).reshape(1, -1))[0]
 
                 else:
 
-                    def rhs(x, t):
+                    def rhs(t, x):
                         return self.predict(x[newaxis, :], u_fun(t))[0]
 
-            return integrator(rhs, x0, t, **integrator_kws)
+            # Need to hard-code below, because odeint and solve_ivp
+            # have different syntax and integration options.
+            if integrator == "solve_ivp":
+                return (
+                    (solve_ivp(rhs, (t[0], t[-1]), x0, t_eval=t, **integrator_kws)).y
+                ).T
+            elif integrator == "odeint":
+                return odeint(rhs, x0, t, tfirst=True, **integrator_kws)
+            else:
+                ValueError("Integrator not supported, exiting")
 
     @property
     def complexity(self):

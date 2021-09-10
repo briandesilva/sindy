@@ -54,9 +54,9 @@ class ConstrainedSR3(SR3):
 
     thresholder : string, optional (default 'l0')
         Regularization function to use. Currently implemented options
-        are 'l0' (l0 norm), 'l1' (l1 norm), 'cad' (clipped
-        absolute deviation), 'weighted_l0' (weighted l0 norm), and
-        'weighted_l1' (weighted l1 norm).
+        are 'l0' (l0 norm), 'l1' (l1 norm), 'l2' (l2 norm) 'cad' (clipped
+        absolute deviation), 'weighted_l0' (weighted l0 norm),
+        'weighted_l1' (weighted l1 norm), and 'weighted_l2' (weighted l2 norm).
 
     max_iter : int, optional (default 30)
         Maximum iterations of the optimization algorithm.
@@ -157,21 +157,9 @@ class ConstrainedSR3(SR3):
             normalize=normalize,
             fit_intercept=fit_intercept,
             copy_X=copy_X,
+            thresholds=thresholds,
         )
 
-        if thresholder[:8].lower() == "weighted" and thresholds is None:
-            raise ValueError(
-                "weighted thresholder requires the thresholds parameter to be used"
-            )
-        if thresholder[:8].lower() != "weighted" and thresholds is not None:
-            raise ValueError(
-                "The thresholds argument cannot be used without a weighted thresholder,"
-                " e.g. thresholder='weighted_l0'"
-            )
-        if thresholds is not None and np.any(thresholds < 0):
-            raise ValueError("thresholds cannot contain negative entries")
-
-        self.thresholds = thresholds
         self.reg = get_regularization(thresholder)
         self.use_constraints = (constraint_lhs is not None) and (
             constraint_rhs is not None
@@ -187,9 +175,6 @@ class ConstrainedSR3(SR3):
             self.constraint_rhs = constraint_rhs
             self.unbias = False
             self.constraint_order = constraint_order
-
-    def _set_threshold(self, threshold):
-        self.threshold = threshold
 
     def _update_full_coef_constraints(self, H, x_transpose_y, coef_sparse):
         g = x_transpose_y + coef_sparse / self.nu
@@ -241,6 +226,9 @@ class ConstrainedSR3(SR3):
 
         Assumes initial guess for coefficients is stored in ``self.coef_``.
         """
+        if self.initial_guess is not None:
+            self.coef_ = self.initial_guess
+
         coef_sparse = self.coef_.T
         n_samples, n_features = x.shape
 

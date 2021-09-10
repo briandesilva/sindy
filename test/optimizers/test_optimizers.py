@@ -18,9 +18,10 @@ from pysindy import SINDy
 from pysindy.feature_library import CustomLibrary
 from pysindy.optimizers import ConstrainedSR3
 from pysindy.optimizers import SINDyOptimizer
+from pysindy.optimizers import SINDyPI
 from pysindy.optimizers import SR3
 from pysindy.optimizers import STLSQ
-from pysindy.optimizers import TrappingSR3
+from pysindy.optimizers import Trapping
 from pysindy.utils import supports_multiple_targets
 
 
@@ -63,7 +64,7 @@ class DummyModelNoCoef(BaseEstimator):
         (STLSQ, True),
         (SR3, True),
         (ConstrainedSR3, True),
-        (TrappingSR3, True),
+        (Trapping, True),
         (DummyLinearModel, False),
     ],
 )
@@ -82,7 +83,7 @@ def data(request):
         STLSQ(),
         SR3(),
         ConstrainedSR3(),
-        TrappingSR3(),
+        Trapping(),
         Lasso(fit_intercept=False),
         ElasticNet(fit_intercept=False),
         DummyLinearModel(),
@@ -173,7 +174,23 @@ def test_sr3_bad_parameters(optimizer, params):
 )
 def test_trapping_bad_parameters(params):
     with pytest.raises(ValueError):
-        TrappingSR3(**params)
+        Trapping(**params)
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        dict(tol=0),
+        dict(max_iter=-1),
+        dict(thresholder="l0"),
+        dict(threshold=-1),
+        dict(thresholds=1),
+        dict(thresholder="weighted_l1"),
+    ],
+)
+def test_sindypi_bad_parameters(params):
+    with pytest.raises(ValueError):
+        SINDyPI(**params)
 
 
 @pytest.mark.parametrize(
@@ -184,7 +201,7 @@ def test_trapping_bad_tensors(params):
     x = np.random.standard_normal((10, 9))
     x_dot = np.random.standard_normal((10, 3))
     with pytest.raises(ValueError):
-        model = TrappingSR3(**params)
+        model = Trapping(**params)
         model.fit(x, x_dot)
 
 
@@ -207,7 +224,7 @@ def test_trapping_quadratic_library(params):
     sindy_library = CustomLibrary(
         library_functions=library_functions, function_names=library_function_names
     )
-    opt = TrappingSR3(**params)
+    opt = Trapping(**params)
     model = SINDy(optimizer=opt, feature_library=sindy_library)
     model.fit(x)
     assert opt.PL.shape == (3, 3, 3, 9)
@@ -241,7 +258,7 @@ def test_trapping_cubic_library(params):
         library_functions=library_functions, function_names=library_function_names
     )
     with pytest.raises(ValueError):
-        opt = TrappingSR3(**params)
+        opt = Trapping(**params)
         model = SINDy(optimizer=opt, feature_library=sindy_library)
         model.fit(x)
 
@@ -250,8 +267,8 @@ def test_trapping_cubic_library(params):
     "error, optimizer, params",
     [
         (ValueError, STLSQ, dict(alpha=-1)),
-        (NotImplementedError, SR3, dict(thresholder="l2")),
-        (NotImplementedError, ConstrainedSR3, dict(thresholder="l2")),
+        (NotImplementedError, SR3, dict(thresholder="l3")),
+        (NotImplementedError, ConstrainedSR3, dict(thresholder="l3")),
         (ValueError, ConstrainedSR3, dict(thresholder="weighted_l0", thresholds=None)),
         (ValueError, ConstrainedSR3, dict(thresholder="weighted_l0", thresholds=None)),
         (ValueError, ConstrainedSR3, dict(thresholds=-np.ones((5, 5)))),
@@ -423,7 +440,7 @@ def test_sr3_enable_trimming(optimizer, data_linear_oscillator_corrupted):
     np.testing.assert_allclose(model_plain.coef_, model_trimming.coef_)
 
 
-@pytest.mark.parametrize("optimizer", [SR3, ConstrainedSR3, TrappingSR3])
+@pytest.mark.parametrize("optimizer", [SR3, ConstrainedSR3, Trapping])
 def test_sr3_warn(optimizer, data_linear_oscillator_corrupted):
     x, x_dot, _ = data_linear_oscillator_corrupted
     model = optimizer(max_iter=1, tol=1e-10)
@@ -438,7 +455,7 @@ def test_sr3_warn(optimizer, data_linear_oscillator_corrupted):
         STLSQ(max_iter=1),
         SR3(max_iter=1),
         ConstrainedSR3(max_iter=1),
-        TrappingSR3(max_iter=1),
+        Trapping(max_iter=1),
     ],
 )
 def test_fit_warn(data_derivative_1d, optimizer):
@@ -449,7 +466,7 @@ def test_fit_warn(data_derivative_1d, optimizer):
         optimizer.fit(x, x_dot)
 
 
-@pytest.mark.parametrize("optimizer", [ConstrainedSR3, TrappingSR3])
+@pytest.mark.parametrize("optimizer", [ConstrainedSR3, Trapping])
 @pytest.mark.parametrize("target_value", [0, -1, 3])
 def test_row_format_constraints(data_linear_combination, optimizer, target_value):
     # Solution is x_dot = x.dot(np.array([[1, 1, 0], [0, 1, 1]]))
@@ -474,7 +491,7 @@ def test_row_format_constraints(data_linear_combination, optimizer, target_value
     )
 
 
-@pytest.mark.parametrize("optimizer", [ConstrainedSR3, TrappingSR3])
+@pytest.mark.parametrize("optimizer", [ConstrainedSR3, Trapping])
 @pytest.mark.parametrize("target_value", [0, -1, 3])
 def test_target_format_constraints(data_linear_combination, optimizer, target_value):
     x, x_dot = data_linear_combination
@@ -504,7 +521,7 @@ def test_trapping_inequality_constraints(thresholds, relax_optim, noise_levels):
     constraint_matrix[0, 6] = 1.0
     constraint_matrix[1, 17] = 1.0
     feature_names = ["x", "y", "z"]
-    opt = TrappingSR3(
+    opt = Trapping(
         threshold=thresholds,
         constraint_lhs=constraint_matrix,
         constraint_rhs=constraint_rhs,
@@ -533,7 +550,7 @@ def test_inequality_constraints_reqs():
     constraint_matrix[0, 6] = 1.0
     constraint_matrix[1, 17] = 1.0
     with pytest.raises(ValueError):
-        TrappingSR3(
+        Trapping(
             threshold=0.0,
             constraint_lhs=constraint_matrix,
             constraint_rhs=constraint_rhs,

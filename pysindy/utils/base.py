@@ -145,6 +145,16 @@ def prox_weighted_l1(x, thresholds):
     return np.sign(x) * np.maximum(np.abs(x) - thresholds, np.ones(x.shape))
 
 
+def prox_l2(x, threshold):
+    """Proximal operator for ridge regularization."""
+    return 2 * threshold * x
+
+
+def prox_weighted_l2(x, thresholds):
+    """Proximal operator for ridge regularization."""
+    return 2 * thresholds * x
+
+
 # TODO: replace code block with proper math block
 def prox_cad(x, lower_threshold):
     """
@@ -170,12 +180,18 @@ def prox_cad(x, lower_threshold):
 
 
 def get_prox(regularization):
-    if regularization.lower() in ("l0", "weighted_l0"):
+    if regularization.lower() == "l0":
         return prox_l0
-    elif regularization.lower() in ("l1", "weighted_l1"):
+    if regularization.lower() == "weighted_l0":
+        return prox_weighted_l0
+    elif regularization.lower() == "l1":
         return prox_l1
     elif regularization.lower() == "weighted_l1":
         return prox_weighted_l1
+    elif regularization.lower() == "l2":
+        return prox_l2
+    elif regularization.lower() == "weighted_l2":
+        return prox_weighted_l2
     elif regularization.lower() == "cad":
         return prox_cad
     else:
@@ -191,6 +207,8 @@ def get_regularization(regularization):
         return lambda x, lam: lam * np.sum(np.abs(x))
     elif regularization.lower() == "weighted_l1":
         return lambda x, lam: np.sum(np.abs(lam @ x))
+    elif regularization.lower() == "l2":
+        return lambda x, lam: lam * np.sum(x ** 2)
     else:
         raise NotImplementedError("{} has not been implemented".format(regularization))
 

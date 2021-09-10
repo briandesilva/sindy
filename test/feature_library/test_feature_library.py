@@ -13,6 +13,7 @@ from pysindy.feature_library import CustomLibrary
 from pysindy.feature_library import FourierLibrary
 from pysindy.feature_library import IdentityLibrary
 from pysindy.feature_library import PolynomialLibrary
+from pysindy.feature_library import SINDyPILibrary
 from pysindy.feature_library.base import BaseFeatureLibrary
 
 
@@ -29,6 +30,20 @@ def test_form_custom_library():
 
     # Test without user-supplied function names
     CustomLibrary(library_functions=library_functions, function_names=None)
+
+    # Test with linear control library
+    CustomLibrary(
+        library_functions=library_functions,
+        function_names=None,
+        linear_control=True,
+        n_control_features=2,
+    )
+
+    # Test with user-supplied function names
+    SINDyPILibrary(library_functions=library_functions, function_names=function_names)
+
+    # Test without user-supplied function names
+    SINDyPILibrary(library_functions=library_functions, function_names=None)
 
 
 def test_bad_parameters():
@@ -51,6 +66,39 @@ def test_bad_parameters():
         function_names = [lambda s: str(s), lambda s: "{}^2".format(s)]
         CustomLibrary(
             library_functions=library_functions, function_names=function_names
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x]
+        function_names = [lambda s: s]
+        CustomLibrary(
+            library_functions=library_functions,
+            function_names=function_names,
+            linear_control=True,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        function_names = [lambda s: str(s), lambda s: "{}^2".format(s)]
+        SINDyPILibrary(
+            library_functions=library_functions, function_names=function_names
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        function_names = [lambda s: str(s), lambda s: "{}^2".format(s)]
+        SINDyPILibrary(
+            x_dot_library_functions=library_functions, function_names=function_names
+        )
+    with pytest.raises(ValueError):
+        SINDyPILibrary()
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        SINDyPILibrary(x_dot_library_functions=library_functions)
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2]
+        function_names = [lambda s: s, lambda s: s + s]
+        SINDyPILibrary(
+            library_functions=library_functions,
+            x_dot_library_functions=library_functions,
+            function_names=function_names,
         )
 
 
