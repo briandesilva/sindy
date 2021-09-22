@@ -200,6 +200,7 @@ class TrappingSR3(SR3):
         max_iter=30,
         accel=False,
         normalize=False,
+        normalize_columns=False,
         fit_intercept=False,
         copy_X=True,
         m0=None,
@@ -268,6 +269,7 @@ class TrappingSR3(SR3):
         self.PWeigs_history_ = []
         self.history_ = []
         self.objective_history = objective_history
+        self.normalize_columns = normalize_columns
         self.unbias = False
         self.use_constraints = (constraint_lhs is not None) and (
             constraint_rhs is not None
@@ -506,6 +508,15 @@ class TrappingSR3(SR3):
         r = y.shape[1]
         N = int((r ** 2 + 3 * r) / 2.0)
 
+        self.Theta = x
+        x_normed = np.copy(x)
+        if self.normalize_columns:
+            reg = np.zeros(n_features)
+            for i in range(n_features):
+                reg[i] = 1.0 / np.linalg.norm(x[:, i], 2)
+                x_normed[:, i] = reg[i] * x[:, i]
+        x = np.copy(x_normed)
+
         # If PL and PQ are passed, make sure dimensions/symmetries are correct
         self._check_P_matrix(r, n_features, N)
 
@@ -514,7 +525,6 @@ class TrappingSR3(SR3):
             self.constraint_lhs = reorder_constraints(
                 self.constraint_lhs, n_features, output_order="target"
             )
-        print(self.coef_)
         coef_sparse = self.coef_.T
 
         # Print initial values for each term in the optimization
@@ -621,5 +631,8 @@ class TrappingSR3(SR3):
                 ConvergenceWarning,
             )
 
-        self.coef_ = coef_sparse.T
+        if self.normalize_columns:
+            self.coef_ = np.multiply(reg, coef_sparse.T)
+        else:
+            self.coef_ = coef_sparse.T
         self.objective_history = objective_history

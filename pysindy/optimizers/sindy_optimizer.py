@@ -31,6 +31,7 @@ class SINDyOptimizer(BaseEstimator):
         Setting ``unbias=True`` will trigger an additional step wherein the nonzero
         coefficients learned by the optimizer object will be updated using an
         unregularized least-squares fit.
+
     """
 
     def __init__(self, optimizer, unbias=True):

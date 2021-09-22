@@ -116,6 +116,17 @@ def data_derivative_2d():
 
 
 @pytest.fixture
+def data_2dspatial():
+    u = np.zeros((100, 50, 2))
+    x = np.linspace(1, 100, 100)
+    y = np.linspace(1, 50, 50)
+    X, Y = np.meshgrid(x, y, indexing="ij")
+    u[:, :, 0] = np.cos(X) * np.sin(Y)
+    u[:, :, 1] = -np.sin(X) * np.cos(Y) ** 2
+    return u
+
+
+@pytest.fixture
 def data_custom_library():
     library_functions = [
         lambda x: x,

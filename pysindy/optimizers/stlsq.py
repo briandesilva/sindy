@@ -49,6 +49,9 @@ class STLSQ(BaseOptimizer):
         the regressors X will be normalized before regression by subtracting
         the mean and dividing by the l2-norm.
 
+    normalize_columns : boolean, optional (default False)
+        Normalize the columns of x (the SINDy library terms)
+
     copy_X : boolean, optional (default True)
         If True, X will be copied; else, it may be overwritten.
 
@@ -98,6 +101,7 @@ class STLSQ(BaseOptimizer):
         max_iter=20,
         ridge_kw=None,
         normalize=False,
+        normalize_columns=False,
         fit_intercept=False,
         copy_X=True,
         initial_guess=None,
@@ -118,6 +122,7 @@ class STLSQ(BaseOptimizer):
         self.alpha = alpha
         self.ridge_kw = ridge_kw
         self.initial_guess = initial_guess
+        self.normalize_columns = normalize_columns
 
     def _sparse_coefficients(self, dim, ind, coef, threshold):
         """Perform thresholding of the weight vector(s)"""
@@ -152,11 +157,19 @@ class STLSQ(BaseOptimizer):
         """
         if self.initial_guess is not None:
             self.coef_ = self.initial_guess
+        self.Theta = x
 
         ind = self.ind_
         n_samples, n_features = x.shape
         n_targets = y.shape[1]
         n_features_selected = np.sum(ind)
+        self.Theta = x
+        x_normed = np.copy(x)
+        if self.normalize_columns:
+            reg = np.zeros(n_features)
+            for i in range(n_features):
+                reg[i] = 1.0 / np.linalg.norm(x[:, i], 2)
+                x_normed[:, i] = reg[i] * x[:, i]
 
         for _ in range(self.max_iter):
             if np.count_nonzero(ind) == 0:
@@ -175,14 +188,16 @@ class STLSQ(BaseOptimizer):
                         "coefficients".format(self.threshold)
                     )
                     continue
-                coef_i = self._regress(x[:, ind[i]], y[:, i])
+                coef_i = self._regress(x_normed[:, ind[i]], y[:, i])
                 coef_i, ind_i = self._sparse_coefficients(
                     n_features, ind[i], coef_i, self.threshold
                 )
                 coef[i] = coef_i
                 ind[i] = ind_i
-
-            self.history_.append(coef)
+            if self.normalize_columns:
+                self.history_.append(np.multiply(reg, coef))
+            else:
+                self.history_.append(coef)
             if np.sum(ind) == n_features_selected or self._no_change():
                 # could not (further) select important features
                 break
@@ -201,7 +216,10 @@ class STLSQ(BaseOptimizer):
                     "STLSQ._reduce has no iterations left to determine coef",
                     ConvergenceWarning,
                 )
-        self.coef_ = coef
+        if self.normalize_columns:
+            self.coef_ = np.multiply(reg, coef)
+        else:
+            self.coef_ = coef
         self.ind_ = ind
 
     @property

@@ -2,6 +2,7 @@
 Unit tests for feature libraries.
 """
 import pytest
+from numpy import zeros
 from scipy.sparse import coo_matrix
 from scipy.sparse import csc_matrix
 from scipy.sparse import csr_matrix
@@ -12,6 +13,7 @@ from pysindy.feature_library import ConcatLibrary
 from pysindy.feature_library import CustomLibrary
 from pysindy.feature_library import FourierLibrary
 from pysindy.feature_library import IdentityLibrary
+from pysindy.feature_library import PDELibrary
 from pysindy.feature_library import PolynomialLibrary
 from pysindy.feature_library.base import BaseFeatureLibrary
 
@@ -29,6 +31,12 @@ def test_form_custom_library():
 
     # Test without user-supplied function names
     CustomLibrary(library_functions=library_functions, function_names=None)
+
+    # Test with user-supplied function names
+    PDELibrary(library_functions=library_functions, function_names=function_names)
+
+    # Test without user-supplied function names
+    PDELibrary(library_functions=library_functions, function_names=None)
 
 
 def test_bad_parameters():
@@ -51,6 +59,114 @@ def test_bad_parameters():
         function_names = [lambda s: str(s), lambda s: "{}^2".format(s)]
         CustomLibrary(
             library_functions=library_functions, function_names=function_names
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        function_names = [lambda s: str(s), lambda s: "{}^2".format(s)]
+        PDELibrary(library_functions=library_functions, function_names=function_names)
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(library_functions=library_functions, derivative_order=-1)
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(library_functions=library_functions, spatial_grid=range(10))
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(library_functions=library_functions, derivative_order=3)
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            derivative_order=-1,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=zeros((10, 10)),
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=zeros((10, 10, 10, 10, 10)),
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=range(10),
+            weak_form=True,
+            p=-1,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            weak_form=True,
+            temporal_grid=range(10),
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            weak_form=True,
+            spatial_grid=range(10),
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=range(10),
+            weak_form=True,
+            Hx=-1,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=range(10),
+            weak_form=True,
+            Hx=11,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=range(10),
+            weak_form=True,
+            K=-1,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=range(10),
+            weak_form=True,
+            Ht=11,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=range(10),
+            weak_form=True,
+            Ht=-1,
+        )
+    with pytest.raises(ValueError):
+        library_functions = [lambda x: x, lambda x: x ** 2, lambda x: 0 * x]
+        PDELibrary(
+            library_functions=library_functions,
+            spatial_grid=range(10),
+            temporal_grid=zeros((10, 3)),
+            weak_form=True,
         )
 
 

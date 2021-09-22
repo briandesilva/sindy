@@ -23,6 +23,9 @@ class FourierLibrary(BaseFeatureLibrary):
     include_cos : boolean, optional (default True)
         If True, include cosine terms in the library.
 
+    library_ensemble : boolean, optional (default False)
+        Whether or not to do library bagging.
+
     Attributes
     ----------
     n_input_features_ : int
@@ -47,7 +50,14 @@ class FourierLibrary(BaseFeatureLibrary):
     ['sin(1 x0)', 'cos(1 x0)', 'sin(2 x0)', 'cos(2 x0)']
     """
 
-    def __init__(self, n_frequencies=1, include_sin=True, include_cos=True):
+    def __init__(
+        self,
+        n_frequencies=1,
+        include_sin=True,
+        include_cos=True,
+        library_ensemble=False,
+        ensemble_indices=0,
+    ):
         super(FourierLibrary, self).__init__()
         if not (include_sin or include_cos):
             raise ValueError("include_sin and include_cos cannot both be False")
@@ -56,6 +66,8 @@ class FourierLibrary(BaseFeatureLibrary):
         self.n_frequencies = n_frequencies
         self.include_sin = include_sin
         self.include_cos = include_cos
+        self.library_ensemble = library_ensemble
+        self.ensemble_indices = ensemble_indices
 
     def get_feature_names(self, input_features=None):
         """
@@ -137,4 +149,16 @@ class FourierLibrary(BaseFeatureLibrary):
                 if self.include_cos:
                     xp[:, idx] = np.cos((i + 1) * x[:, j])
                     idx += 1
-        return xp
+
+        # If library bagging, return xp missing a single column
+        if self.library_ensemble:
+            if self.n_output_features_ == 1:
+                raise ValueError(
+                    "Can't use library ensemble methods if your"
+                    " library is just one term!"
+                )
+            inds = range(self.n_output_features_)
+            inds = np.delete(inds, self.ensemble_indices)
+            return xp[:, inds]
+        else:
+            return xp

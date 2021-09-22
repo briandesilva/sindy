@@ -73,6 +73,33 @@ def test_centered_difference_2d(data_derivative_2d):
     np.testing.assert_allclose(centered_difference(x), x_dot)
 
 
+def test_centered_difference_xy_yx(data_2dspatial):
+    u = data_2dspatial
+    x_grid = np.linspace(1, 100, 100)
+    y_grid = np.linspace(1, 50, 50)
+    u_x = np.zeros(u.shape)
+    u_y = np.zeros(u.shape)
+    u_xy = np.zeros(u.shape)
+    u_yx = np.zeros(u.shape)
+    for i in range(100):
+        u_y[i, :, :] = FiniteDifference(order=2, d=1)._centered_difference(
+            u[i, :, :], y_grid
+        )
+    for i in range(50):
+        u_x[:, i, :] = FiniteDifference(order=2, d=1)._centered_difference(
+            u[:, i, :], x_grid
+        )
+    for i in range(100):
+        u_xy[i, :, :] = FiniteDifference(order=2, d=1)._centered_difference(
+            u_x[i, :, :], y_grid
+        )
+    for i in range(50):
+        u_yx[:, i, :] = FiniteDifference(order=2, d=1)._centered_difference(
+            u_y[:, i, :], x_grid
+        )
+    np.testing.assert_allclose(u_xy, u_yx)
+
+
 # Alternative implementation of the four tests above using parametrization
 @pytest.mark.parametrize(
     "data, order",
@@ -109,6 +136,10 @@ def test_order_error():
         FiniteDifference(order=3)
     with pytest.raises(ValueError):
         FiniteDifference(order=-1)
+    with pytest.raises(ValueError):
+        FiniteDifference(d=-1)
+    with pytest.raises(ValueError):
+        FiniteDifference(d=2, order=1)
 
 
 def test_base_class(data_derivative_1d):

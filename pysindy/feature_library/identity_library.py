@@ -1,3 +1,4 @@
+from numpy import delete
 from sklearn.utils import check_array
 from sklearn.utils.validation import check_is_fitted
 
@@ -18,6 +19,9 @@ class IdentityLibrary(BaseFeatureLibrary):
         The total number of output features. The number of output features
         is equal to the number of input features.
 
+    library_ensemble : boolean, optional (default False)
+        Whether or not to do library bagging.
+
     Examples
     --------
     >>> import numpy as np
@@ -32,8 +36,14 @@ class IdentityLibrary(BaseFeatureLibrary):
     ['x0', 'x1']
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        library_ensemble=False,
+        ensemble_indices=0,
+    ):
         super(IdentityLibrary, self).__init__()
+        self.library_ensemble = library_ensemble
+        self.ensemble_indices = ensemble_indices
 
     def get_feature_names(self, input_features=None):
         """
@@ -97,4 +107,15 @@ class IdentityLibrary(BaseFeatureLibrary):
         if n_features != self.n_input_features_:
             raise ValueError("x shape does not match training shape")
 
-        return x.copy()
+        # If library bagging, return x missing a single column
+        if self.library_ensemble:
+            if n_features == 1:
+                raise ValueError(
+                    "Can't use library ensemble methods if your"
+                    " library is just one term!"
+                )
+            inds = range(self.n_output_features_)
+            inds = delete(inds, self.ensemble_indices)
+            return (x.copy())[:, inds]
+        else:
+            return x.copy()

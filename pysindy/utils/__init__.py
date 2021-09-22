@@ -1,5 +1,6 @@
 from .base import capped_simplex_projection
 from .base import drop_nan_rows
+from .base import drop_random_rows
 from .base import equations
 from .base import get_prox
 from .base import get_regularization
@@ -15,6 +16,7 @@ from .base import validate_input
 __all__ = [
     "capped_simplex_projection",
     "drop_nan_rows",
+    "drop_random_rows",
     "equations",
     "get_prox",
     "get_regularization",

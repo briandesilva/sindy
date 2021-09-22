@@ -37,6 +37,8 @@ class PolynomialLibrary(PolynomialFeatures, BaseFeatureLibrary):
     order : str in {'C', 'F'}, optional (default 'C')
         Order of output array in the dense case. 'F' order is faster to
         compute, but may slow down subsequent estimators.
+    library_ensemble : boolean, optional (default False)
+        Whether or not to do library bagging.
 
     Attributes
     ----------
@@ -58,6 +60,8 @@ class PolynomialLibrary(PolynomialFeatures, BaseFeatureLibrary):
         interaction_only=False,
         include_bias=True,
         order="C",
+        library_ensemble=False,
+        ensemble_indices=0,
     ):
         super(PolynomialLibrary, self).__init__(
             degree=degree,
@@ -73,6 +77,8 @@ class PolynomialLibrary(PolynomialFeatures, BaseFeatureLibrary):
                 " be True"
             )
         self.include_interaction = include_interaction
+        self.library_ensemble = library_ensemble
+        self.ensemble_indices = ensemble_indices
 
     @staticmethod
     def _combinations(
@@ -256,4 +262,15 @@ class PolynomialLibrary(PolynomialFeatures, BaseFeatureLibrary):
                 for i, comb in enumerate(combinations):
                     xp[:, i] = x[:, comb].prod(1)
 
-        return xp
+        # If library bagging, return xp missing a single column
+        if self.library_ensemble:
+            if self.n_output_features_ == 1:
+                raise ValueError(
+                    "Can't use library ensemble methods if your"
+                    " library is just one term!"
+                )
+            inds = range(self.n_output_features_)
+            inds = np.delete(inds, self.ensemble_indices)
+            return xp[:, inds]
+        else:
+            return xp

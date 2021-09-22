@@ -1,6 +1,7 @@
 from itertools import combinations
 from itertools import combinations_with_replacement as combinations_w_r
 
+from numpy import delete
 from numpy import empty
 from sklearn.utils import check_array
 from sklearn.utils.validation import check_is_fitted
@@ -34,6 +35,9 @@ class CustomLibrary(BaseFeatureLibrary):
         will be included.
         If False, all combinations will be included.
 
+    library_ensemble : boolean, optional (default False)
+        Whether or not to do library bagging.
+
     Attributes
     ----------
     functions : list of functions
@@ -66,7 +70,14 @@ class CustomLibrary(BaseFeatureLibrary):
     ['f0(x0)', 'f0(x1)', 'f1(x0,x1)']
     """
 
-    def __init__(self, library_functions, function_names=None, interaction_only=True):
+    def __init__(
+        self,
+        library_functions,
+        function_names=None,
+        interaction_only=True,
+        library_ensemble=False,
+        ensemble_indices=0,
+    ):
         super(CustomLibrary, self).__init__()
         self.functions = library_functions
         self.function_names = function_names
@@ -76,6 +87,8 @@ class CustomLibrary(BaseFeatureLibrary):
                 " number of elements"
             )
         self.interaction_only = interaction_only
+        self.library_ensemble = library_ensemble
+        self.ensemble_indices = ensemble_indices
 
     @staticmethod
     def _combinations(n_features, n_args, interaction_only):
@@ -171,4 +184,15 @@ class CustomLibrary(BaseFeatureLibrary):
                 xp[:, library_idx] = f(*[x[:, j] for j in c])
                 library_idx += 1
 
-        return xp
+        # If library bagging, return xp missing a single column
+        if self.library_ensemble:
+            if self.n_output_features_ == 1:
+                raise ValueError(
+                    "Can't use library ensemble methods if your"
+                    " library is just one term!"
+                )
+            inds = range(self.n_output_features_)
+            inds = delete(inds, self.ensemble_indices)
+            return xp[:, inds]
+        else:
+            return xp
