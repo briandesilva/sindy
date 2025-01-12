@@ -173,25 +173,24 @@ Community guidelines
 
 Contributing examples
 ^^^^^^^^^^^^^^^^^^^^^
-We love seeing examples of PySINDy being used to solve interesting problems! If you would like to contribute an example, reach out to us by creating an issue.
+We love seeing examples of PySINDy being used to solve interesting problems! If you would like to contribute an example to the documentation, reach out to us by creating an issue.
 
-At a minimum, we need to be able to run the example notebooks in the normal mode as well as in a test mode that uses smaller data in order to run faster and simply verify that cells execute without error.  In order to do that, your example should obey the following directory tree
+Examples are external repositories that
+`follow a structure <https://github.com/dynamicslab/pysindy-example>`_ that pysindy
+knows how to incorporate into its documentation build.  They tend to be pinned to
+a set of dependencies and may not be kept up to date with breaking API changes.
 
-.. code-block::
-
-  ./<name_of_example>/
-  \
-   |-example.py # save your notebook as a python script
-   |-example_data.py # has functions to create/load data
-   |-mock_data.py # has functions with same name as in example_data.py which create/load smaller datasets
-   |-example.ipynb # run python examples/publish_notebook/<name_of_example> to generate this.  Needs packages in requirements-dev.txt
-   |-utils.py (Any other names example.py needs to import.  Any additional local modules imported by example.py need to be submodules of utils.py, e.g. utils.plotting)
-
-You can optimize your notebook for testing by checking ``__name__``.  When our tests run ``example.py`` they set the ``__name__`` global to ``"testing"``.  For instance, your notebook should determine whether to import from ``mock_data`` or ``example_data`` using this method (another example: you could also use this method to set ``max_iter``).  It's a bit arbitrary, but try to make your examples run in under ten seconds using the mock data.  You can use our test to verify your example in testing mode:
-
-.. code-block::
-
-   pytest -k test_external --external-notebook="path/to/<name_of_example>"
+The linked repository has information on how to set up your example.  To PR the example
+into this repository, (a) edit examples/external.yml and examples/README.rst with your
+repository information and (b) verify your own build passes in your repository,
+including publishing on github pages.  If you want to keep your example up to date with
+the pysindy main branch, (c) add your repository information to the ``notify-experiments``
+workflow so that pysindy will trigger your notebooks to be run in CI in your own repo.
+This will require adding a
+`fine-grained PAT <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>`_
+with the permissions ``contents: read & write`` and ``metadata: read only`` to the
+pysindy GH secrets. Alternatively, you can just trigger your builds based on cron timing.
+See the pysindy experiments repo for more information.
 
 
 Contributing code

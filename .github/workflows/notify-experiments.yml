@@ -1,0 +1,16 @@
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  notify-notebook:
+    runs-on: ubuntu-latest
+    steps:
+      # Add more like these when linking external example CI
+      - name: Inform original paper
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PYSINDY_EXAMPLE_PAT }}
+          repository: dynamicslab/sindy-original-example
+          event-type: pysindy-commit

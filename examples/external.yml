@@ -1,0 +1,5 @@
+- name: "original"
+  user: "dynamicslab"
+  repo: "sindy-original-example"
+  ref: "e68efeb"
+  dir: "examples"

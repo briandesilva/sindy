@@ -50,11 +50,13 @@ dev = [
 ]
 docs = [
     "ipython",
+    "nbsphinx",
     "pandoc",
+    "requests",
     "sphinx-rtd-theme",
-    "sphinx==7.1.2",
+    "sphinx==7.4.7",
+    "pyyaml",
     "sphinxcontrib-apidoc",
-    "nbsphinx"
 ]
 miosr = [
     "gurobipy>=9.5.1,!=10.0.0"
